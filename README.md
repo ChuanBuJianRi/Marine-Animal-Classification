@@ -88,6 +88,8 @@ pip install -r requirements.txt
 ## Quick start
 
 ### 1. Prepare data
+Download dataset from kaggle: https://www.kaggle.com/datasets/vencerlanz09/sea-animals-image-dataste
+Thank you for the amazing dataset!
 
 Put images in **per-class folders** under `data/processed/`:
 
@@ -113,7 +115,7 @@ From the project root:
 python3 -m src.train --config configs/cnn.yaml
 
 # Better accuracy: ResNet18 or AlexNet
-python3 -m src.train --config configs/resnet18.yaml
+python3 -m src.train --config configs/: https://www.kaggle.com/datasets/vencerlanz09/sea-animals-image-dataste
 python3 -m src.train --config configs/alexnet.yaml
 ```
 
