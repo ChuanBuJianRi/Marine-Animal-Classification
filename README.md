@@ -29,9 +29,12 @@
 
 ## Screenshots
 
-| Training console | Identify (drag-and-drop) |
-|------------------|---------------------------|
-| ![Dashboard](docs/images/dashboard.png) | ![Identify](docs/images/111.png) |
+| Training console | 
+|------------------|
+| ![Dashboard](docs/images/dashboard.png) | 
+| Identify (drag-and-drop) |
+|------------------|
+| ![Identify](docs/images/111.png) |
 
 ---
 
