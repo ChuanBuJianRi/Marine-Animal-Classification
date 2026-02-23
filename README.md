@@ -75,7 +75,7 @@ marine_animal/
 ## Installation
 
 ```bash
-git clone <>
+git clone https://github.com/ChuanBuJianRi/Marine-Animal-Classification.git
 cd marine_animal
 pip install -r requirements.txt
 ```
