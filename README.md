@@ -4,7 +4,6 @@
 
 **Marine Species Classifier** is a local, end-to-end image classification pipeline for marine life (fish, mammals, reptiles, etc.). It provides a **web dashboard** for managing per-class image data, training CNN/ResNet18/AlexNet models with configurable YAML settings, and a **drag-and-drop Identify page** that runs the current best checkpoint on any uploaded image and returns top-k predictions with confidence. All runs locally—no cloud required.
 
-*Short (e.g. for GitHub repo description):*  
 *Local image classifier for marine species with a web UI for data, training, and drag-and-drop identification (PyTorch, Flask).*
 
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
@@ -76,7 +75,7 @@ marine_animal/
 ## Installation
 
 ```bash
-git clone <your-repo-url>
+git clone <>
 cd marine_animal
 pip install -r requirements.txt
 ```
