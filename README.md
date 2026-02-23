@@ -31,7 +31,7 @@
 
 | Training console | Identify (drag-and-drop) |
 |------------------|---------------------------|
-| ![Dashboard](docs/images/dashboard.png) | ![Identify](docs/images/Screenshot 2026-02-22 @23.58.36.png) |
+| ![Dashboard](docs/images/dashboard.png) | ![Identify](docs/images/111.png) |
 
 ---
 
