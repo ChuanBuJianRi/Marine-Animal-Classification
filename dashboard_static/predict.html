@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marine Species Recognition – Drag to Identify</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 1.5rem; background: #0f172a; color: #e2e8f0; max-width: 900px; margin-left: auto; margin-right: auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .sub { color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    a { color: #3b82f6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .drop-zone {
+      border: 2px dashed #475569;
+      border-radius: 12px;
+      padding: 2.5rem;
+      text-align: center;
+      color: #94a3b8;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .drop-zone.dragover { border-color: #3b82f6; background: rgba(59, 130, 246, 0.08); }
+    .drop-zone input { display: none; }
+    .preview { margin-top: 1rem; text-align: center; }
+    .preview img { max-width: 100%; max-height: 280px; border-radius: 8px; border: 1px solid #334155; }
+    .result {
+      margin-top: 1.5rem;
+      padding: 1.25rem;
+      background: #1e293b;
+      border-radius: 8px;
+      border-left: 4px solid #3b82f6;
+    }
+    .result h3 { margin: 0 0 0.5rem 0; font-size: 1rem; color: #f1f5f9; }
+    .result .main { font-size: 1.25rem; color: #22c55e; font-weight: 600; }
+    .result .conf { color: #94a3b8; font-size: 0.9rem; margin-top: 0.25rem; }
+    .result table { width: 100%; margin-top: 0.75rem; border-collapse: collapse; font-size: 0.9rem; }
+    .result th, .result td { padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid #334155; }
+    .result th { color: #94a3b8; font-weight: 600; }
+    .err { color: #ef4444; padding: 1rem; background: rgba(239,68,68,0.1); border-radius: 8px; margin-top: 1rem; }
+    .loading { color: #94a3b8; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Marine Species Recognition</h1>
+  <p class="sub">Drag an image into the area below to identify with the current best model. <a href="/">Back to training console</a></p>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.bmp,.webp" />
+    <p id="dropText">Drag image here, or click to select</p>
+  </div>
+
+  <div class="preview" id="preview" style="display:none;">
+    <img id="previewImg" alt="Preview" />
+  </div>
+
+  <div id="out"></div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const dropText = document.getElementById('dropText');
+    const preview = document.getElementById('preview');
+    const previewImg = document.getElementById('previewImg');
+    const out = document.getElementById('out');
+
+    function showPreview(file) {
+      const url = URL.createObjectURL(file);
+      previewImg.src = url;
+      preview.style.display = 'block';
+    }
+
+    function setOut(html) {
+      out.innerHTML = html;
+    }
+
+    function runPredict(file) {
+      showPreview(file);
+      setOut('<p class="loading">Identifying…</p>');
+
+      const fd = new FormData();
+      fd.append('image', file);
+      fd.append('top_k', '5');
+
+      fetch('/api/predict', { method: 'POST', body: fd })
+        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function({ ok, data }) {
+          if (!ok) {
+            let errHtml = '<div class="err">' + escapeHtml(data.error || 'Request failed');
+            if (data.detail) errHtml += '<pre style="white-space:pre-wrap;font-size:0.8em;margin-top:0.5rem;">' + escapeHtml(data.detail) + '</pre>';
+            errHtml += '</div>';
+            setOut(errHtml);
+            return;
+          }
+          let html = '<div class="result">';
+          html += '<h3>Result</h3>';
+          html += '<p class="main">' + escapeHtml(data.prediction) + '</p>';
+          html += '<p class="conf">Confidence ' + (data.confidence * 100).toFixed(1) + '%</p>';
+          if (data.top_k && data.top_k.length) {
+            html += '<table><thead><tr><th>Class</th><th>Confidence</th></tr></thead><tbody>';
+            for (let i = 0; i < data.top_k.length; i++) {
+              const row = data.top_k[i];
+              html += '<tr><td>' + escapeHtml(row.class_name) + '</td><td>' + (row.confidence * 100).toFixed(1) + '%</td></tr>';
+            }
+            html += '</tbody></table>';
+          }
+          html += '</div>';
+          setOut(html);
+        })
+        .catch(function(e) {
+          setOut('<div class="err">Network error: ' + escapeHtml(String(e)) + '</div>');
+        });
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+
+    dropZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragover'); });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && /\.(jpe?g|png|bmp|webp)$/i.test(file.name)) runPredict(file);
+      else setOut('<div class="err">Please upload an image (jpg / png / bmp / webp).</div>');
+    });
+
+    fileInput.addEventListener('change', function() {
+      const file = fileInput.files[0];
+      if (file) runPredict(file);
+      fileInput.value = '';
+    });
+  </script>
+</body>
+</html>

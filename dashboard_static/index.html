@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marine Classifier – Local Console</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem; background: #0f172a; color: #e2e8f0; max-width: 1200px; margin-left: auto; margin-right: auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .sub { color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    section { background: #1e293b; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; }
+    section h2 { font-size: 1.1rem; margin: 0 0 1rem 0; color: #f1f5f9; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-weight: 600; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
+    .chart-wrap { position: relative; height: 260px; }
+    .empty { color: #64748b; padding: 1rem; }
+    .refresh { margin-bottom: 1rem; }
+    button, .btn { background: #3b82f6; color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    button:hover, .btn:hover { background: #2563eb; }
+    button.secondary { background: #475569; }
+    button.secondary:hover { background: #334155; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    input[type="text"], select { padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 0.9rem; }
+    .drop-zone { border: 2px dashed #475569; border-radius: 8px; padding: 2rem; text-align: center; color: #94a3b8; margin: 0.75rem 0; transition: border-color 0.2s, background 0.2s; }
+    .drop-zone.dragover { border-color: #3b82f6; background: #1e3a5f; }
+    .drop-zone input { display: none; }
+    .row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; }
+    .row label { min-width: 120px; }
+    .msg { margin-top: 0.5rem; font-size: 0.85rem; }
+    .msg.ok { color: #22c55e; }
+    .msg.err { color: #ef4444; }
+    .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.8rem; font-weight: 500; }
+    .status-badge.running { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .status-badge.running::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: pulse 1.2s ease-in-out infinite; }
+    .status-badge.idle { background: rgba(100, 116, 139, 0.25); color: #94a3b8; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .empty code { background: #334155; padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>Marine Species Classifier – Local Console</h1>
+  <p class="sub">View dataset, add classes and data (drag & drop), update splits, run training · <a href="/predict" style="color:#3b82f6;">Identify</a></p>
+
+  <section>
+    <h2>Current dataset</h2>
+    <div class="refresh"><button type="button" onclick="loadDatasetStats(); loadClasses();">Refresh</button></div>
+    <div id="dataset-table-wrap"><p class="empty">Loading…</p></div>
+  </section>
+
+  <section>
+    <h2>Add data</h2>
+    <p style="color:#94a3b8;font-size:0.9rem;margin-bottom:1rem;">Add a new class or more images to an existing class. Then click &quot;Update splits&quot; and &quot;Start training&quot;.</p>
+
+    <h3 style="font-size:1rem;margin-bottom:0.5rem;">Add new class</h3>
+    <div class="row">
+      <label for="new-class-name">New class name</label>
+      <input type="text" id="new-class-name" placeholder="e.g. Squid" />
+      <button type="button" onclick="createClass()">Create class</button>
+    </div>
+    <div id="new-class-msg" class="msg"></div>
+    <label style="display:block;margin-top:0.75rem;">Drop images here (or click to select)</label>
+    <div class="drop-zone" id="drop-new" data-class="">
+      <input type="file" id="file-new" multiple accept=".jpg,.jpeg,.png,.bmp,.webp" />
+      <p id="drop-new-text">Drag images for the new class here, or click to choose. Set class name above and create class first.</p>
+    </div>
+    <div id="upload-new-msg" class="msg"></div>
+
+    <h3 style="font-size:1rem;margin:1.25rem 0 0.5rem 0;">Add to existing class</h3>
+    <div class="row">
+      <label for="existing-class">Class</label>
+      <select id="existing-class"><option value="">Loading…</option></select>
+    </div>
+    <div class="drop-zone" id="drop-existing">
+      <input type="file" id="file-existing" multiple accept=".jpg,.jpeg,.png,.bmp,.webp" />
+      <p>Drag images here or click to choose. Select class above first.</p>
+    </div>
+    <div id="upload-existing-msg" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Actions</h2>
+    <div class="row">
+      <button type="button" onclick="updateSplits()">Update splits (70/15/15)</button>
+      <button type="button" onclick="startTraining()" class="secondary">Start / Continue training</button>
+    </div>
+    <div id="action-msg" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Training progress</h2>
+    <div class="refresh" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <span id="training-status-badge" class="status-badge"></span>
+      <button type="button" onclick="loadTrainingLog()">Refresh now</button>
+      <span id="refresh-ts" style="color:#64748b;font-size:0.82rem;"></span>
+      <span id="api-status" style="color:#64748b;font-size:0.82rem;"></span>
+    </div>
+    <div id="training-summary" style="display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:1rem;font-size:0.9rem;"></div>
+    <div class="charts">
+      <div>
+        <p style="margin:0 0 0.3rem 0;color:#94a3b8;font-size:0.85rem;">Loss</p>
+        <div class="chart-wrap"><canvas id="chart-loss"></canvas></div>
+      </div>
+      <div>
+        <p style="margin:0 0 0.3rem 0;color:#94a3b8;font-size:0.85rem;">Accuracy</p>
+        <div class="chart-wrap"><canvas id="chart-acc"></canvas></div>
+      </div>
+    </div>
+    <div id="training-empty" class="empty" style="display:block;padding:1rem;">Loading training log… (open this page at <strong>http://127.0.0.1:5001</strong>)</div>
+  </section>
+
+  <script>
+    const API = '';
+    async function fetchJson(path, noCache) {
+      const url = noCache ? API + path + (path.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now() : API + path;
+      const r = await fetch(url, noCache ? { cache: 'no-store' } : {});
+      if (!r.ok) return null;
+      return r.json();
+    }
+
+    let chartLoss = null;
+    let chartAcc = null;
+
+    const CHART_DEFAULTS = {
+      type: 'line',
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { labels: { color: '#e2e8f0' } } },
+        scales: {
+          x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+          y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+        }
+      }
+    };
+
+    function buildDatasetTable(stats) {
+      const wrap = document.getElementById('dataset-table-wrap');
+      if (stats.error || !stats.class_names || !stats.class_names.length) {
+        wrap.innerHTML = '<p class="empty">No dataset yet. Add a class and upload images above.</p>';
+        return;
+      }
+      const splits = stats.splits || {};
+      let html = '<table><thead><tr><th>Class</th><th>Train</th><th>Val</th><th>Test</th><th>Total</th></tr></thead><tbody>';
+      const names = stats.class_names;
+      for (let i = 0; i < names.length; i++) {
+        const tr = splits.train?.per_class?.[i] ?? 0;
+        const va = splits.val?.per_class?.[i] ?? 0;
+        const te = splits.test?.per_class?.[i] ?? 0;
+        html += `<tr><td>${escapeHtml(names[i])}</td><td>${tr}</td><td>${va}</td><td>${te}</td><td>${tr + va + te}</td></tr>`;
+      }
+      html += '<tr><td><strong>Total</strong></td><td>' + (splits.train?.total ?? 0) + '</td><td>' + (splits.val?.total ?? 0) + '</td><td>' + (splits.test?.total ?? 0) + '</td><td>-</td></tr></tbody></table>';
+      wrap.innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function loadDatasetStats() {
+      const stats = await fetchJson('/api/dataset_stats');
+      buildDatasetTable(stats || {});
+    }
+
+    async function loadClasses() {
+      const list = await fetchJson('/api/classes') || [];
+      const sel = document.getElementById('existing-class');
+      sel.innerHTML = list.length ? list.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('') : '<option value="">No classes yet</option>';
+    }
+
+    function setMsg(id, text, isErr) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'msg ' + (isErr ? 'err' : 'ok');
+    }
+
+    async function createClass() {
+      const name = document.getElementById('new-class-name').value.trim();
+      if (!name) { setMsg('new-class-msg', 'Enter a class name.', true); return; }
+      setMsg('new-class-msg', '');
+      const r = await fetch(API + '/api/classes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg('new-class-msg', data.error || 'Failed to create class', true); return; }
+      const safe = data.class_name || name.replace(/\s+/g, '_');
+      setMsg('new-class-msg', 'Class “‘ + safe + '” created. You can drop images in the box below.', false);
+      document.getElementById('drop-new').dataset.class = safe;
+      document.getElementById('drop-new-text').textContent = 'Drop images for “‘ + safe + '” here, or click to choose.';
+      loadClasses();
+      loadDatasetStats();
+    }
+
+    async function uploadFiles(classKey, files, msgId) {
+      if (!files.length) return;
+      const class_name = classKey === 'new' ? document.getElementById('drop-new').dataset.class : document.getElementById('existing-class').value;
+      if (!class_name) { setMsg(msgId, classKey === 'new' ? 'Create a class first.' : 'Select an existing class.', true); return; }
+      setMsg(msgId, 'Uploading…');
+      const fd = new FormData();
+      fd.append('class_name', class_name);
+      for (let i = 0; i < files.length; i++) fd.append('files', files[i]);
+      const r = await fetch(API + '/api/upload', { method: 'POST', body: fd });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg(msgId, data.error || 'Upload failed', true); return; }
+      setMsg(msgId, 'Saved ' + (data.saved || 0) + ' image(s) to “‘ + (data.class_name || class_name) + '”.', false);
+      loadDatasetStats();
+    }
+
+    function setupDropZone(zoneId, fileId, classKey, msgId) {
+      const zone = document.getElementById(zoneId);
+      const fileInput = document.getElementById(fileId);
+      zone.addEventListener('click', () => fileInput.click());
+      zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        const files = Array.from(e.dataTransfer.files).filter(f => /\.(jpe?g|png|bmp|webp)$/i.test(f.name));
+        uploadFiles(classKey, files, msgId);
+      });
+      fileInput.addEventListener('change', () => {
+        uploadFiles(classKey, Array.from(fileInput.files), msgId);
+        fileInput.value = '';
+      });
+    }
+
+    async function updateSplits() {
+      setMsg('action-msg', 'Updating splits…');
+      const r = await fetch(API + '/api/update_splits', { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg('action-msg', data.error || 'Update failed', true); return; }
+      setMsg('action-msg', 'Splits updated. You can start training.', false);
+      loadDatasetStats();
+    }
+
+    async function startTraining() {
+      setMsg('action-msg', '');
+      const r = await fetch(API + '/api/start_training', { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg('action-msg', data.error || 'Failed to start training', true); return; }
+      setMsg('action-msg', (data.message || 'Training started. Refresh to see progress.'), false);
+    }
+
+    function destroyChart(c) { try { if (c) c.destroy(); } catch(e) {} return null; }
+
+    function drawCharts(log) {
+      const emptyEl = document.getElementById('training-empty');
+      const summaryEl = document.getElementById('training-summary');
+      const refreshTsEl = document.getElementById('refresh-ts');
+      const chartLossEl = document.getElementById('chart-loss');
+      const chartAccEl = document.getElementById('chart-acc');
+
+      if (!emptyEl || !summaryEl) return;
+
+      var validLog = Array.isArray(log) ? log : [];
+      var apiStatusEl = document.getElementById('api-status');
+      if (validLog.length === 0) {
+        emptyEl.style.display = 'block';
+        emptyEl.innerHTML = 'No training log or cannot connect. Open this page at <strong>http://127.0.0.1:5001</strong> (run <code>python -m src.serve_dashboard</code> first) and run training at least once.';
+        summaryEl.innerHTML = '';
+        if (refreshTsEl) refreshTsEl.textContent = '';
+        if (apiStatusEl) apiStatusEl.textContent = '';
+        return;
+      }
+      if (apiStatusEl) apiStatusEl.textContent = 'Loaded ' + validLog.length + ' record(s)';
+
+      emptyEl.style.display = 'none';
+      var epochs = validLog.map(function(d) { return d.epoch; });
+      var last = validLog[validLog.length - 1];
+      var trainAcc = (last.train_acc != null && !isNaN(last.train_acc)) ? (last.train_acc * 100).toFixed(1) : '-';
+      var valAcc = (last.val_acc != null && !isNaN(last.val_acc)) ? (last.val_acc * 100).toFixed(1) : '-';
+
+      summaryEl.innerHTML =
+        '<span><span style="color:#94a3b8">Epoch</span> <strong>' + (last.epoch ?? '-') + '</strong></span>' +
+        '<span><span style="color:#94a3b8">Train loss</span> <strong>' + (last.train_loss ?? '-') + '</strong></span>' +
+        '<span><span style="color:#ef4444">Val loss</span> <strong>' + (last.val_loss ?? '-') + '</strong></span>' +
+        '<span><span style="color:#22c55e">Train acc</span> <strong>' + trainAcc + '%</strong></span>' +
+        '<span><span style="color:#3b82f6">Val acc</span> <strong>' + valAcc + '%</strong></span>' +
+        '<span><span style="color:#94a3b8">LR</span> <strong>' + (last.lr ?? '-') + '</strong></span>';
+
+      chartLoss = destroyChart(chartLoss);
+      chartAcc = destroyChart(chartAcc);
+
+      if (typeof Chart === 'undefined') {
+        if (emptyEl) { emptyEl.style.display = 'block'; emptyEl.innerHTML = 'Chart.js not loaded. Check network or CDN.'; }
+        return;
+      }
+      if (!chartLossEl || !chartAccEl) return;
+
+      try {
+        chartLoss = new Chart(chartLossEl, {
+          ...CHART_DEFAULTS,
+          data: {
+            labels: epochs,
+            datasets: [
+              { label: 'Train loss', data: validLog.map(function(d) { return d.train_loss; }), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.07)', fill: true, tension: 0.3, pointRadius: 2 },
+              { label: 'Val loss', data: validLog.map(function(d) { return d.val_loss; }), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.07)', fill: true, tension: 0.3, pointRadius: 2 }
+            ]
+          }
+        });
+        chartAcc = new Chart(chartAccEl, {
+          ...CHART_DEFAULTS,
+          data: {
+            labels: epochs,
+            datasets: [
+              { label: 'Train acc', data: validLog.map(function(d) { return d.train_acc; }), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.07)', fill: true, tension: 0.3, pointRadius: 2 },
+              { label: 'Val acc', data: validLog.map(function(d) { return d.val_acc; }), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.07)', fill: true, tension: 0.3, pointRadius: 2 }
+            ]
+          }
+        });
+      } catch (err) {
+        console.error('drawCharts error', err);
+        if (emptyEl) { emptyEl.style.display = 'block'; emptyEl.innerHTML = 'Chart error: ' + (err.message || String(err)); }
+        return;
+      }
+      if (refreshTsEl) refreshTsEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    }
+
+    function setApiStatus(text) {
+      var el = document.getElementById('api-status');
+      if (el) el.textContent = text;
+    }
+
+    async function loadTrainingLog() {
+      setApiStatus('Connecting…');
+      var raw;
+      try {
+        raw = await fetchJson('/api/training_log', true);
+      } catch (e) {
+        raw = null;
+        setApiStatus('Cannot connect to server');
+      }
+      var log = Array.isArray(raw) ? raw : [];
+      if (log.length === 0 && !raw) setApiStatus('Open this page at http://127.0.0.1:5001');
+      drawCharts(log);
+    }
+
+    let trainingRunning = false;
+    let refreshIntervalMs = 5000;
+    let pollInProgress = false;
+
+    async function updateTrainingStatus() {
+      const st = await fetchJson('/api/training_status', true);
+      const running = st && st.running === true;
+      if (running !== trainingRunning) {
+        trainingRunning = running;
+        refreshIntervalMs = running ? 2000 : 5000;
+        if (refreshIntervalId) {
+          clearInterval(refreshIntervalId);
+          refreshIntervalId = setInterval(pollTraining, refreshIntervalMs);
+        }
+      }
+      const badge = document.getElementById('training-status-badge');
+      if (badge) {
+        badge.textContent = running ? 'Training' : 'Idle';
+        badge.className = 'status-badge ' + (running ? 'running' : 'idle');
+      }
+    }
+
+    let refreshIntervalId = null;
+    async function pollTraining() {
+      if (pollInProgress) return;
+      pollInProgress = true;
+      try {
+        await loadTrainingLog();
+        await updateTrainingStatus();
+      } catch (e) {
+        console.warn('Poll error', e);
+      } finally {
+        pollInProgress = false;
+      }
+    }
+
+    (function init() {
+      if (window.location.protocol === 'file:') {
+        var emptyEl = document.getElementById('training-empty');
+        if (emptyEl) {
+          emptyEl.style.display = 'block';
+          emptyEl.innerHTML = 'Opened as local file. Run in project root: <br><code>python -m src.serve_dashboard</code><br>Then open in browser: <strong>http://127.0.0.1:5001</strong>';
+        }
+        setApiStatus('(file open, not connected)');
+        return;
+      }
+      try {
+        loadDatasetStats();
+      } catch (e) { console.warn(e); }
+      try {
+        loadClasses();
+      } catch (e) { console.warn(e); }
+      loadTrainingLog().then(function() {
+        try { updateTrainingStatus(); } catch (e) { console.warn(e); }
+      });
+      refreshIntervalId = setInterval(pollTraining, refreshIntervalMs);
+      try {
+        setupDropZone('drop-new', 'file-new', 'new', 'upload-new-msg');
+        setupDropZone('drop-existing', 'file-existing', 'existing', 'upload-existing-msg');
+      } catch (e) { console.warn(e); }
+    })();
+  </script>
+</body>
+</html>

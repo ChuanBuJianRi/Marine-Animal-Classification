@@ -1,0 +1,29 @@
+# Model
+model:
+  name: cnn
+  num_classes: null  # set from dataset
+  dropout: 0.4
+
+# Data
+data:
+  data_dir: data/processed
+  splits_dir: data/splits
+  image_size: 224
+  train_batch_size: 32
+  val_batch_size: 64
+  num_workers: 0
+
+# Training
+train:
+  epochs: 60
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  scheduler: cosine  # cosine | plateau
+  early_stop_patience: 5
+  seed: 42
+
+# Paths
+paths:
+  checkpoint_dir: checkpoints
+  runs_dir: runs
+  reports_dir: reports
